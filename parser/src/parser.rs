@@ -1,91 +1,7 @@
-use std::{fmt::Debug, iter::Iterator, iter::Peekable, vec::IntoIter};
+use std::{iter::Iterator, iter::Peekable, vec::IntoIter};
 
-use super::lexer::{Lexer, Span, Token};
-#[derive(Debug)]
-pub enum Operator {
-    Add,
-    Sub,
-    Div,
-    Mul,
-    Eq,
-    NotEq,
-    Gt,
-    Gte,
-    Lt,
-    Lte,
-
-    Error(String),
-}
-impl Operator {
-    fn from_str(op: &str) -> Operator {
-        match op {
-            "+" => Operator::Add,
-            "-" => Operator::Sub,
-            "/" => Operator::Div,
-            "*" => Operator::Mul,
-            "==" => Operator::Eq,
-            "!=" => Operator::NotEq,
-
-            ">" => Operator::Gt,
-            ">=" => Operator::Gte,
-            "<" => Operator::Lt,
-            "<=" => Operator::Lte,
-            _ => Operator::Error(op.into()),
-        }
-    }
-}
-pub struct Node {
-    ntype: NodeType,
-    span: Span,
-    ty: Option<String>,
-}
-
-impl Debug for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node").field("ntype", &self.ntype).finish()
-    }
-}
-
-impl Node {
-    fn new(ntype: NodeType, span: Span) -> Node {
-        let ty = match ntype {
-            NodeType::Comparison { .. } => Some("bool".to_string()),
-            _ => None,
-        };
-        Self { ntype, span, ty }
-    }
-}
-
-#[derive(Debug)]
-pub enum NodeType {
-    Scope(Vec<Node>),
-    Ident(String),
-    LitNumber(String),
-    LitString(String),
-    BinaryExpression {
-        op: Operator,
-        lhs: Box<Node>,
-        rhs: Box<Node>,
-    },
-    UnaryExpr {
-        op: Operator,
-        rhs: Box<Node>,
-    },
-    Comparison {
-        op: Operator,
-        lhs: Box<Node>,
-        rhs: Box<Node>,
-    },
-    Grouping(Box<Node>),
-    Assignment {
-        lhs: Box<Node>,
-        rhs: Box<Node>,
-    },
-    VarDecl {
-        lhs: Box<Node>,
-    },
-    Empty,
-}
+use super::ast::{Node, NodeType, Operator, Parameter};
+use super::lexer::{Lexer, Token};
 
 type ParseResult = Result<Node, String>;
 type LexIter = Peekable<IntoIter<Token>>;
@@ -100,10 +16,62 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> ParseResult {
-        self.equality()
+        self.assign()
+    }
+    /// parse global scope
+    /// first step: functions only
+    fn global(&mut self) -> ParseResult {
+        let funs: Vec<NodeType> = Vec::new();
+        while let Some(tok) = self.toks.peek() {
+            match tok {
+                Token::Ident(c, span) if c == "fn" => if let Ok(node) = self.func() {},
+                _ => todo!(),
+            }
+        }
+        todo!()
     }
 
-    fn pif(&mut self) -> ParseResult {
+    fn func(&mut self) -> ParseResult {
+        let tok_name = self.next_ident_if(None);
+        if tok_name.is_none() {
+            return Err("Funktionsname erwartet".to_string());
+        }
+
+        todo!()
+    }
+
+    fn func_params(&mut self) -> ParseResult {
+        todo!()
+    }
+
+    fn assign(&mut self) -> ParseResult {
+        let mut lhs = self.expression()?;
+
+        if let Some(tok) = self.peek_op_in(&["="]) {
+            let (_, span) = match tok {
+                Token::Punct(op, span) => (op, span),
+                _ => unreachable!(),
+            };
+            let ret = Node::new(
+                NodeType::Assignment {
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(self.expression()?),
+                },
+                span,
+            );
+            self.consume(";", "expected ';'");
+            lhs = ret;
+        }
+
+        Ok(lhs)
+    }
+
+    fn block(&mut self) -> ParseResult {
+        // let list: Vec<Node> = Vec::new();
+        // while let Some(next) = self.toks.peek() {
+        //     match Token {}
+        // }
+        // Ok(Node::new(NodeType::Block(list), Span::new(0, 0)))
         todo!()
     }
 
@@ -121,7 +89,7 @@ impl Parser {
             };
             let ret = Node::new(
                 NodeType::Comparison {
-                    op: Operator::from_str(&opstr),
+                    op: Operator::from_opstr(&opstr),
                     lhs: Box::new(lhs),
                     rhs: Box::new(self.comparison()?),
                 },
@@ -142,7 +110,7 @@ impl Parser {
             };
             let ret = Node::new(
                 NodeType::Comparison {
-                    op: Operator::from_str(&opstr),
+                    op: Operator::from_opstr(&opstr),
                     lhs: Box::new(lhs),
                     rhs: Box::new(self.term()?),
                 },
@@ -163,7 +131,7 @@ impl Parser {
             };
             let ret = Node::new(
                 NodeType::BinaryExpression {
-                    op: Operator::from_str(&opstr),
+                    op: Operator::from_opstr(&opstr),
                     lhs: Box::new(lhs),
                     rhs: Box::new(self.factor()?),
                 },
@@ -185,7 +153,7 @@ impl Parser {
             };
             let ret = Node::new(
                 NodeType::BinaryExpression {
-                    op: Operator::from_str(&opstr),
+                    op: Operator::from_opstr(&opstr),
                     lhs: Box::new(lhs),
                     rhs: Box::new(self.unary()?),
                 },
@@ -204,7 +172,7 @@ impl Parser {
             };
             let ret = Node::new(
                 NodeType::UnaryExpr {
-                    op: Operator::from_str(&opstr),
+                    op: Operator::from_opstr(&opstr),
 
                     rhs: Box::new(self.unary()?),
                 },
@@ -238,12 +206,16 @@ impl Parser {
         self.toks
             .next_if(|c| ops.iter().any(|o: &&str| o == &c.get_punct()))
     }
-    fn consume(&mut self, token: &str, msg: &str) {
-        match self.toks.next_if(|c| c.get_punct() == token) {
+    fn consume(&mut self, token_str: &str, msg: &str) {
+        match self.toks.next_if(|c| c.get_punct() == token_str) {
             Some(_) => {}
             None => {
                 println!("Error: {msg}")
             }
         }
+    }
+
+    fn next_ident_if(&mut self, tok_str: Option<&str>) -> Option<Token> {
+        self.toks.next_if(|x| x.is_ident(tok_str))
     }
 }

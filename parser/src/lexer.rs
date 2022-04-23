@@ -25,6 +25,20 @@ pub enum Token {
     StrLit(String, Span),
     Punct(String, Span),
 }
+impl Token {
+    pub fn get_inner_string_val(&self) -> &str {
+        match self {
+            Token::Ident(s, _) => s,
+            Token::NumLit(s, _) => s,
+            Token::StrLit(s, _) => s,
+            Token::Punct(s, _) => s,
+        }
+    }
+    pub fn is_ident(&self, s: Option<&str>) -> bool {
+        matches!(self, Self::Ident(_, _) if 
+            matches!(s,Some(x) if x == self.get_inner_string_val())|| s.is_none())
+    }
+}
 
 impl Token {
     pub fn get_punct(&self) -> String {
