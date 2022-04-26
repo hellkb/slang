@@ -1,5 +1,7 @@
-use parser::parser::Parser;
+//use
 use std::env;
+
+use parser::parser::Parser;
 fn main() -> std::io::Result<()> {
     let fname = match env::args().nth(1) {
         Some(f) => f,
