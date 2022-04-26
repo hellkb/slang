@@ -35,8 +35,8 @@ impl Operator {
     }
 }
 pub struct Node {
-    ntype: NodeType,
-    span: Span,
+    pub ntype: NodeType,
+    pub span: Span,
     ty: Option<Type>,
 }
 
@@ -53,6 +53,16 @@ impl Node {
             _ => None,
         };
         Self { ntype, span, ty }
+    }
+    pub fn get_ident(&self) -> Option<(String, Span)> {
+        match self {
+            Node {
+                ntype: NodeType::Ident(s),
+                span,
+                ..
+            } => Some((s.clone(), *span)),
+            _ => None,
+        }
     }
 }
 #[derive(Debug)]
@@ -88,9 +98,24 @@ pub enum NodeType {
     VarDecl {
         lhs: Box<Node>,
     },
-    Function {
+    FunctionDecl {
         name: String,
-        params: Vec<Parameter>,
+        params: Vec<Node>,
+    },
+    FnOrIdx {
+        name: String,
+        call: Vec<Node>,
+    },
+    FunctionCall {
+        params: Vec<Node>,
+    },
+    ArrayIdx {
+        idx: Box<Node>,
     },
     Empty,
+}
+
+enum Punct {
+    Round,
+    Square,
 }

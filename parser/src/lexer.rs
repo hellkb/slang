@@ -4,7 +4,7 @@ use std::{
     iter::{Enumerate, Peekable},
     str::Chars,
 };
-#[derive(Debug, Clone)]
+#[derive(Debug,Copy, Clone)]
 pub struct Span {
     pub row: u32,
     pub column: u32,
@@ -34,11 +34,40 @@ impl Token {
             Token::Punct(s, _) => s,
         }
     }
+    pub fn get_inner_values(&self) -> (String, Span) {
+        let (s,span) = match self {
+            Token::Ident(s, span) => (s,span),
+            Token::NumLit(s, span) => (s,span),
+            Token::StrLit(s, span) => (s,span),
+            Token::Punct(s, span) => (s,span),
+        };
+        (s.to_string(), span.clone())
+    }
+
     pub fn is_ident(&self, s: Option<&str>) -> bool {
         matches!(self, Self::Ident(_, _) if 
             matches!(s,Some(x) if x == self.get_inner_string_val())|| s.is_none())
     }
+    pub fn is_numlit(&self, s: Option<&str>) -> bool {
+        matches!(self, Self::NumLit(_, _) if 
+            matches!(s,Some(x) if x == self.get_inner_string_val())|| s.is_none())
+    }
+    pub fn is_punct(&self, s: Option<&str>) -> bool {
+        matches!(self, Self::Punct(_, _) if 
+            matches!(s,Some(x) if x == self.get_inner_string_val())|| s.is_none())
+    }
+
+    
 }
+
+/// compare two Tokens, ignoring Span
+impl std::cmp::PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other) 
+            && self.get_inner_string_val() == other.get_inner_string_val()
+    }
+}
+
 
 impl Token {
     pub fn get_punct(&self) -> String {
