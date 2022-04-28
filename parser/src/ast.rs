@@ -115,7 +115,15 @@ pub enum NodeType {
     Empty,
 }
 
-enum Punct {
-    Round,
-    Square,
+pub struct Bracket;
+impl Bracket {
+    pub fn get_closing(open: &str) -> &'static str {
+        match open {
+            "(" => ")",
+            "[" => "]",
+            "{" => "}",
+            "<" => ">",
+            _ => unreachable!(),
+        }
+    }
 }

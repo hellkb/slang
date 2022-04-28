@@ -2,7 +2,7 @@ use std::{iter::Iterator, iter::Peekable, vec::IntoIter};
 
 use crate::lexer::Span;
 
-use super::ast::{Node, NodeType, Operator, Parameter};
+use super::ast::{Bracket, Node, NodeType, Operator};
 use super::lexer::{Lexer, Token};
 
 type ParseResult = Result<Node, String>;
@@ -204,16 +204,16 @@ impl Parser {
         if bracket.is_none() {
             return Ok(node);
         }
-        while let Some(bracket) = self.next_op_in_if(&["("]) {
+        while let Some(bracket) = self.next_op_in_if(&["(", "["]) {
             let b = bracket.get_inner_string_val();
-            //println!("209:{b}");
+
             let cnode = Node::new(
                 NodeType::FunctionCall { params: Vec::new() },
                 Span::new(0, 0),
             );
             v.push(cnode);
 
-            self.eat_punc(")")?;
+            self.eat_punc(Bracket::get_closing(b))?;
         }
         node = Node::new(
             NodeType::FnOrIdx {
@@ -227,14 +227,13 @@ impl Parser {
     }
     fn primary(&mut self) -> ParseResult {
         if let Some(tok) = self.toks.next() {
-            //let p1 = self.peek_op_in(&["(", "["]);
             let (nt, span) = match tok {
                 Token::Ident(v, s) => (NodeType::Ident(v), s),
                 Token::NumLit(v, s) => (NodeType::LitNumber(v), s),
                 Token::StrLit(v, s) => (NodeType::LitString(v), s),
                 Token::Punct(v, s) if v == "(" => {
                     let ret = Node::new(NodeType::Grouping(Box::new(self.expression()?)), s);
-                    self.eat_punc(")")?;
+                    self.eat_punc(Bracket::get_closing("("))?;
                     return Ok(ret);
                 }
                 _ => unreachable!(),
@@ -247,14 +246,14 @@ impl Parser {
     fn call_idx(&mut self) -> Result<Vec<Node>, String> {
         let calls: Vec<Node> = Vec::new();
 
-        while let Some(tok) = self.next_op_in_if(&["(", "[-"]) {
+        while let Some(tok) = self.next_op_in_if(&["(", "["]) {
             let (opstr, span) = match tok {
                 Token::Punct(op, span) => (op, span),
                 _ => unreachable!(),
             };
             self.eat_punc(&opstr)?;
 
-            self.eat_punc(")")?;
+            self.eat_punc(Bracket::get_closing(&opstr))?;
         }
 
         todo!()
