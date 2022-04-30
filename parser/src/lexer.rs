@@ -100,7 +100,7 @@ impl Lexer {
     pub fn tokens(&self) -> Vec<Token> {
         let mut tokens = Vec::new();
         let mut start_column: usize;
-        let mut comment= false;
+        let mut comment:bool;
         for (row, line) in self.src.lines().enumerate() {
             let mut line = line.chars().enumerate().peekable();
             comment = false;

@@ -91,11 +91,23 @@ impl Parser {
                 let node = Node::new(NodeType::Block(nodes), span);
                 return Ok(node);
             };
+            match self.toks.peek() {
+                Some(Token::Ident(c, s)) => match c as &str {
+                    "let" => todo!(),
+                    "while" => todo!(),
+                    "if" => todo!(),
+                    _ => nodes.push(self.assign()?),
+                },
+                _ => todo!(),
+            }
 
             nodes.push(self.assign()?);
         }
     }
 
+    // fn p_let(&mut self) -> ParseResult {
+
+    // }
     //fn p_let(&mut self) -> ParseResult {}
 
     fn assign(&mut self) -> ParseResult {
