@@ -57,7 +57,7 @@ impl Node {
     pub fn get_ident(&self) -> Option<(String, Span)> {
         match self {
             Node {
-                ntype: NodeType::Ident(s),
+                ntype: NodeType::Ident(s, None),
                 span,
                 ..
             } => Some((s.clone(), *span)),
@@ -66,16 +66,17 @@ impl Node {
     }
 }
 #[derive(Debug)]
-pub struct Type(String);
+pub struct Type(pub String);
 #[derive(Debug)]
 pub struct Parameter(String, Type);
 
 #[derive(Debug)]
 pub enum NodeType {
     Block(Vec<Node>),
-    Ident(String),
+    Ident(String, Option<Type>),
     LitNumber(String),
     LitString(String),
+
     BinaryExpression {
         op: Operator,
         lhs: Box<Node>,
@@ -101,6 +102,8 @@ pub enum NodeType {
     FunctionDecl {
         name: String,
         params: Vec<Node>,
+        ret: Type,
+        body: Box<Node>, //Block
     },
     FnOrIdx {
         name: String,
