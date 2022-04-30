@@ -37,7 +37,7 @@ impl Operator {
 pub struct Node {
     pub ntype: NodeType,
     pub span: Span,
-    ty: Option<Type>,
+    pub ty: Option<Type>,
 }
 
 impl Debug for Node {

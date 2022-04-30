@@ -41,7 +41,7 @@ impl Token {
             Token::StrLit(s, span) => (s,span),
             Token::Punct(s, span) => (s,span),
         };
-        (s.to_string(), span.clone())
+        (s.to_string(), *span)
     }
 
     pub fn is_ident(&self, s: Option<&str>) -> bool {
@@ -82,7 +82,7 @@ pub struct Lexer {
     src: String,
     name: String,
     puncts: Vec<&'static str>,
-    keywords: Vec<&'static str>,
+    
 }
 impl Lexer {
     pub fn new(src: String, name: String) -> Self {
@@ -91,25 +91,30 @@ impl Lexer {
             name,
             puncts: vec![
                 "=", "==", ">=", "<=", "!=", "+", "-", "*", "/", "(", ")", "{", "}", "[", "]", ";",
-                "->", "//", "&&", "||", "=>", ":", "%", ",",
+                "->", "//", "&&", "||", "=>", ":", "%", ",", "//",
             ],
-            keywords: vec!["let", "if", "else", "match", "fn", "struct", "enum"],
+            //keywords: vec!["let", "if", "else", "match", "fn", "struct", "enum"],
         }
     }
 
     pub fn tokens(&self) -> Vec<Token> {
         let mut tokens = Vec::new();
         let mut start_column: usize;
+        let mut comment= false;
         for (row, line) in self.src.lines().enumerate() {
             let mut line = line.chars().enumerate().peekable();
-
+            comment = false;
             while let Some((col, c)) = line.peek() {
                 start_column = *col;
+                if comment {
+                    line.next();
+                    continue;
+                }
                 match c {
                     '0'..='9' => tokens.push(get_num_lit(&mut line, row, start_column)),
 
                     '"' => tokens.push(get_str_lit(&mut line, row, start_column)),
-                    // '/' => tokens.push(get_punc(&mut line, row, &self.puncts)),
+                    //'/' => tokens.push(get_punc(&mut line, row, &self.puncts)),
                     _ if c.is_whitespace() => {
                         line.next();
                     }
@@ -118,7 +123,12 @@ impl Lexer {
                         tokens.push(get_ident(&mut line, row, start_column))
                     }
                     _ if c.is_ascii_punctuation() => {
-                        tokens.push(get_punc(&mut line, row, &self.puncts))
+                        let p = get_punc(&mut line, row, &self.puncts);
+                        if p.get_inner_string_val() == "//" {
+                            comment = true;
+                        }  else { 
+                            tokens.push(p);
+                        }
                     }
                     _ => {
                         //Error?
@@ -176,6 +186,7 @@ fn get_str_lit(line: &mut LineIter, row: usize, column: usize) -> Token {
 
 fn get_punc(line: &mut LineIter, row: usize, puncts: &[&str]) -> Token {
     let (col, c) = line.next().unwrap();
+
 
     let mut zstring = c.to_string();
     zstring.push(line.peek().map_or('X', |c| c.1));

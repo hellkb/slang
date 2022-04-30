@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::{iter::Iterator, iter::Peekable, vec::IntoIter};
 
 use crate::ast::Type;
@@ -28,7 +27,7 @@ impl Parser {
         let mut funs: Vec<Node> = Vec::new();
         while let Some(tok) = self.toks.peek() {
             match tok {
-                Token::Ident(c, span) if c == "fn" => {
+                Token::Ident(c, _) if c == "fn" => {
                     self.toks.next();
                     let node = self.func()?;
                     funs.push(node);
@@ -56,7 +55,7 @@ impl Parser {
             NodeType::FunctionDecl {
                 name: fn_name,
                 params,
-                body: Box::new(self.block()?),
+                body: Box::new(self.block(None)?),
                 ret: ret_type,
             },
             fn_name_span,
@@ -79,17 +78,25 @@ impl Parser {
         }
     }
 
-    fn block(&mut self) -> ParseResult {
-        let (_, span) = self.eat_punc("{")?;
+    fn block(&mut self, eaten_span: Option<Span>) -> ParseResult {
+        let span = if let Some(s) = eaten_span {
+            s
+        } else {
+            let (_, s) = self.eat_punc("{")?;
+            s
+        };
         let mut nodes = Vec::new();
         loop {
             if self.next_punct_if(Some("}")).is_some() {
                 let node = Node::new(NodeType::Block(nodes), span);
                 return Ok(node);
             };
+
             nodes.push(self.assign()?);
         }
     }
+
+    //fn p_let(&mut self) -> ParseResult {}
 
     fn assign(&mut self) -> ParseResult {
         let mut lhs = self.expression()?;
@@ -270,11 +277,15 @@ impl Parser {
                     self.eat_punc(Bracket::get_closing("("))?;
                     return Ok(ret);
                 }
+                Token::Punct(v, s) if v == "{" => {
+                    let ret = self.block(Some(s))?;
+
+                    return Ok(ret);
+                }
                 Token::Punct(v, s) => {
                     println!("nicht erwartet: '{}' at {:?}", v, s);
                     return Err("".to_string());
                 }
-                _ => unreachable!(),
             };
             let ret = Node::new(nt, span);
             return Ok(ret);
@@ -358,16 +369,14 @@ impl Parser {
     fn next_punct_if(&mut self, tok_str: Option<&str>) -> Option<Token> {
         self.toks.next_if(|x| x.is_punct(tok_str))
     }
-    fn next_is(&mut self, tok_str: Option<&str>) -> Option<Token> {
-        self.toks.next_if(|x| x.is_ident(tok_str))
-    }
+
     fn next_ident_if(&mut self, tok_str: Option<&str>) -> Option<Token> {
         self.toks.next_if(|x| x.is_ident(tok_str))
     }
 
     fn next_ident_value_if(&mut self, tok_str: Option<&str>) -> Result<(String, Span), String> {
         let tok = self
-            .next_ident_if(None)
+            .next_ident_if(tok_str)
             .ok_or_else(|| "function name expected".to_string())?;
 
         Ok(tok.get_inner_values())
