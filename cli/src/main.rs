@@ -14,7 +14,7 @@ fn main() -> std::io::Result<()> {
     let mut parser = Parser::new(src, name);
     let ast = parser.parse();
 
-    println!("{:#?}-", ast);
+    println!("{:#?}", ast);
 
     Ok(())
 }
