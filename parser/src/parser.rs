@@ -1,9 +1,9 @@
 use std::{iter::Iterator, iter::Peekable, vec::IntoIter};
 
-use crate::ast::Type;
+use crate::ast::{Function, Type};
 use crate::lexer::Span;
 
-use super::ast::{Bracket, Node, NodeType, Operator};
+use super::ast::{Bracket, Globals, Node, NodeType, Operator};
 use super::lexer::{Lexer, Token};
 
 type ParseResult = Result<Node, String>;
@@ -18,25 +18,40 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Node>, String> {
+    pub fn parse(&mut self) -> Result<Globals, String> {
         self.global()
     }
     /// parse global scope
     /// first step: functions only
-    fn global(&mut self) -> Result<Vec<Node>, String> {
-        let mut funs: Vec<Node> = Vec::new();
+    fn global(&mut self) -> Result<Globals, String> {
+        let mut glob = Globals::new();
+        //let mut funs: Vec<Node> = Vec::new();
         while let Some(tok) = self.toks.peek() {
             match tok {
                 Token::Ident(c, _) if c == "fn" => {
                     self.toks.next();
                     let node = self.func()?;
-                    funs.push(node);
+
+                    let (name, parameters, return_type, body) = if let NodeType::FunctionDecl {
+                        name,
+                        params,
+                        ret,
+                        body,
+                    } = node.ntype
+                    {
+                        (name, params, ret, body)
+                    } else {
+                        unreachable!()
+                    };
+                    let f = Function::new(parameters, return_type, *body, node.span);
+                    glob.functions.insert(name, f);
                 }
 
                 _ => return Err("nur fn erlaubt".to_string()),
             }
         }
-        Ok(funs)
+
+        Ok(glob)
     }
 
     fn func(&mut self) -> ParseResult {
@@ -47,7 +62,6 @@ impl Parser {
         self.eat_punc(")")?;
         let mut ret_type = Type("()".to_string());
         if self.next_punct_if(Some("->")).is_some() {
-            //ret_type = self.ttype()?;
             ret_type = self.ttype()?;
         }
 
@@ -85,6 +99,7 @@ impl Parser {
             let (_, s) = self.eat_punc("{")?;
             s
         };
+        println!("{:?}", span);
         let mut nodes = Vec::new();
         loop {
             if self.next_punct_if(Some("}")).is_some() {
@@ -92,23 +107,74 @@ impl Parser {
                 return Ok(node);
             };
             match self.toks.peek() {
-                Some(Token::Ident(c, s)) => match c as &str {
-                    "let" => todo!(),
-                    "while" => todo!(),
-                    "if" => todo!(),
-                    _ => nodes.push(self.assign()?),
-                },
-                _ => todo!(),
+                Some(a) if a.get_inner_string_val() == "let" => {
+                    nodes.push(self.p_let()?);
+                }
+                None => {
+                    todo!()
+                }
+                _ => {
+                    nodes.push(self.p_if()?);
+                    self.next_punct_if(Some(";"));
+                }
             }
-
-            nodes.push(self.assign()?);
+            //nodes.push(self.p_if()?);
         }
     }
+    /// Todo if ... else if
+    fn p_let(&mut self) -> ParseResult {
+        let node = self.next_ident_if(Some("let"));
+        let (_, span) = node.unwrap().get_inner_values();
+        let lhs = Box::new(self.typed_ident()?);
+        self.next_punct_if(Some("="));
+        let rhs = Box::new(self.p_if()?);
+        self.next_punct_if(Some(";"));
+        Ok(Node::new(NodeType::VarDecl { lhs, rhs }, span))
+    }
+    fn p_if(&mut self) -> ParseResult {
+        let node = self.next_ident_if(Some("if"));
+        if node.is_none() {
+            return self.p_while();
+        }
+        let (_, span) = node.unwrap().get_inner_values();
+        let cond = self.expression()?;
+        //        println!("{:?}", cond);
+        let tblock = self.block(None)?;
+        let fblock = if self.next_ident_if(Some("else")).is_none() {
+            None
+        } else {
+            Some(Box::new(self.block(None)?))
+        };
+        let ret = Node::new(
+            NodeType::IfExpression {
+                condition: Box::new(cond),
+                true_case: Box::new(tblock),
+                false_case: fblock,
+            },
+            span,
+        );
 
-    // fn p_let(&mut self) -> ParseResult {
+        Ok(ret)
+    }
+    fn p_while(&mut self) -> ParseResult {
+        let node = self.next_ident_if(Some("while"));
+        if node.is_none() {
+            return self.assign();
+        }
+        let (_, span) = node.unwrap().get_inner_values();
+        let cond = self.expression()?;
+        //        println!("{:?}", cond);
+        let body = self.block(None)?;
+        let ret = Node::new(
+            NodeType::WhileExpression {
+                condition: Box::new(cond),
+                body: Box::new(body),
+            },
+            span,
+        );
 
-    // }
-    //fn p_let(&mut self) -> ParseResult {}
+        Ok(ret)
+    }
 
     fn assign(&mut self) -> ParseResult {
         let mut lhs = self.expression()?;
@@ -121,10 +187,11 @@ impl Parser {
             let ret = Node::new(
                 NodeType::Assignment {
                     lhs: Box::new(lhs),
-                    rhs: Box::new(self.expression()?),
+                    rhs: Box::new(self.p_while()?),
                 },
                 span,
             );
+            //println!("{:?}", lhs.span.clone());
             self.eat_punc(";")?;
             lhs = ret;
         }
@@ -134,7 +201,12 @@ impl Parser {
 
     fn expression(&mut self) -> ParseResult {
         let expr = self.equality()?;
+        //self.next_punct_if(Some(";"));
         Ok(expr)
+    }
+
+    fn tuple(&mut self) -> ParseResult {
+        todo!()
     }
 
     fn equality(&mut self) -> ParseResult {
@@ -256,17 +328,25 @@ impl Parser {
             return Ok(node);
         }
         while let Some(bracket) = self.next_op_in_if(&["(", "["]) {
-            let b = bracket.get_inner_string_val();
-
-            let cnode = Node::new(
-                NodeType::FunctionCall {
-                    params: self.function_call_params()?,
-                },
-                Span::new(0, 0),
-            );
+            let (b, span) = bracket.get_inner_values();
+            let cnode = if b == "(" {
+                Node::new(
+                    NodeType::FunctionCall {
+                        params: self.function_call_params()?,
+                    },
+                    span,
+                )
+            } else {
+                Node::new(
+                    NodeType::ArrayIdx {
+                        idx: Box::new(self.expression()?),
+                    },
+                    span,
+                )
+            };
             v.push(cnode);
 
-            self.eat_punc(Bracket::get_closing(b))?;
+            self.eat_punc(Bracket::get_closing(&b))?;
         }
         node = Node::new(
             NodeType::FnOrIdx {
@@ -284,6 +364,7 @@ impl Parser {
                 Token::Ident(v, s) => (NodeType::Ident(v, None), s),
                 Token::NumLit(v, s) => (NodeType::LitNumber(v), s),
                 Token::StrLit(v, s) => (NodeType::LitString(v), s),
+                Token::CharLit(v, s) => (NodeType::LitChar(v), s),
                 Token::Punct(v, s) if v == "(" => {
                     let ret = Node::new(NodeType::Grouping(Box::new(self.expression()?)), s);
                     self.eat_punc(Bracket::get_closing("("))?;

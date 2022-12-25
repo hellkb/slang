@@ -23,6 +23,7 @@ pub enum Token {
     Ident(String, Span),
     NumLit(String, Span),
     StrLit(String, Span),
+    CharLit(String, Span),
     Punct(String, Span),
 }
 impl Token {
@@ -31,6 +32,9 @@ impl Token {
             Token::Ident(s, _) => s,
             Token::NumLit(s, _) => s,
             Token::StrLit(s, _) => s,
+            
+            Token::CharLit(s, _) => s,
+
             Token::Punct(s, _) => s,
         }
     }
@@ -39,6 +43,7 @@ impl Token {
             Token::Ident(s, span) => (s,span),
             Token::NumLit(s, span) => (s,span),
             Token::StrLit(s, span) => (s,span),
+            Token::CharLit(s, span) => (s,span),
             Token::Punct(s, span) => (s,span),
         };
         (s.to_string(), *span)
@@ -91,7 +96,7 @@ impl Lexer {
             name,
             puncts: vec![
                 "=", "==", ">=", "<=", "!=", "+", "-", "*", "/", "(", ")", "{", "}", "[", "]", ";",
-                "->", "//", "&&", "||", "=>", ":", "%", ",", "//",
+                "->", "//", "&&", "||", "=>", ":", "%", ",",  ".." ,
             ],
             //keywords: vec!["let", "if", "else", "match", "fn", "struct", "enum"],
         }
@@ -114,6 +119,7 @@ impl Lexer {
                     '0'..='9' => tokens.push(get_num_lit(&mut line, row, start_column)),
 
                     '"' => tokens.push(get_str_lit(&mut line, row, start_column)),
+                    '\'' => tokens.push(get_char_lit(&mut line, row, start_column)),
                     //'/' => tokens.push(get_punc(&mut line, row, &self.puncts)),
                     _ if c.is_whitespace() => {
                         line.next();
@@ -182,6 +188,13 @@ fn get_str_lit(line: &mut LineIter, row: usize, column: usize) -> Token {
     let lit: String = line.map(|c| c.1).take_while(|c| *c != '"').collect();
     line.next();
     Token::StrLit(lit, Span::new(row, column))
+}
+
+fn get_char_lit(line: &mut LineIter, row: usize, column: usize) -> Token {
+    line.next(); // skip "
+    let lit: String = line.map(|c| c.1).take_while(|c| *c != '\'').collect();
+    line.next();
+    Token::CharLit(lit, Span::new(row, column))
 }
 
 fn get_punc(line: &mut LineIter, row: usize, puncts: &[&str]) -> Token {

@@ -1,5 +1,5 @@
 use super::lexer::Span;
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 #[derive(Debug)]
 pub enum Operator {
@@ -45,6 +45,39 @@ impl Debug for Node {
         f.debug_struct("Node").field("ntype", &self.ntype).finish()
     }
 }
+#[derive(Debug)]
+pub struct Function {
+    parameters: Vec<Node>,
+    return_type: Type,
+    body: Node,
+    span: Span,
+}
+
+impl Function {
+    pub fn new(parameters: Vec<Node>, return_type: Type, body: Node, span: Span) -> Self {
+        Self {
+            parameters,
+            return_type,
+            body,
+            span,
+        }
+    }
+}
+#[derive(Debug)]
+pub struct Globals {
+    pub functions: HashMap<String, Function>,
+    // structs: ...,
+    // enums: ...,
+    // constants: ...,
+}
+
+impl Globals {
+    pub fn new() -> Self {
+        Self {
+            functions: HashMap::new(),
+        }
+    }
+}
 
 impl Node {
     pub fn new(ntype: NodeType, span: Span) -> Node {
@@ -76,6 +109,16 @@ pub enum NodeType {
     Ident(String, Option<Type>),
     LitNumber(String),
     LitString(String),
+    LitChar(String),
+    IfExpression {
+        condition: Box<Node>,
+        true_case: Box<Node>,
+        false_case: Option<Box<Node>>,
+    },
+    WhileExpression {
+        condition: Box<Node>,
+        body: Box<Node>,
+    },
 
     BinaryExpression {
         op: Operator,
@@ -98,6 +141,7 @@ pub enum NodeType {
     },
     VarDecl {
         lhs: Box<Node>,
+        rhs: Box<Node>,
     },
     FunctionDecl {
         name: String,
@@ -114,6 +158,10 @@ pub enum NodeType {
     },
     ArrayIdx {
         idx: Box<Node>,
+    },
+    Range {
+        low: Option<Box<Node>>,
+        high: Option<Box<Node>>,
     },
     Empty,
 }
